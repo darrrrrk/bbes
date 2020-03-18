@@ -1439,7 +1439,7 @@ class BBES:
 
                 key = ()
                 for heur in self.branching_heuristic:
-                    if heur == "1":
+                    if heur == "1": 
                         key_here = np.random.rand()
                     elif heur == "2":
                         key_here = (1 if child_loglik > -self.top_threshold
@@ -1447,10 +1447,12 @@ class BBES:
                     elif heur == '3':
                         key_here = min(child_loglik,
                                    -self.top_threshold)
-                    elif heur == '4':
+                    elif heur == '4': 
                         key_here = child_loglik
                     elif heur == '5':
-                        key_here = abs(child_loglik + self.top_threshold)
+                        key_here = abs(child_loglik + self.penalty_weight)
+                    elif heur == '6':
+                        key_here = -child_loglik
                     else:
                         raise ValueError("Unknown branching heuristic")
                     key = key + (key_here, )
