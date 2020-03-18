@@ -2150,9 +2150,11 @@ if __name__ == "__main__":
             big = 2# use 5 instead of 6 variables by default
         main(heuristic_i, big)
         '''
-
+        
+        #run coding task here
+        #heuristic number 1-6
         run_experiment(5, p_edge=.5, num_repeats=100, N=10000,
-                       without_precomp=0,  use_peek=False,
+                       without_precomp=1,  use_peek=False,
                        branching_heuristic=('4'),
                        verbose=-1, show_progress=(-1 <= 1))
 
