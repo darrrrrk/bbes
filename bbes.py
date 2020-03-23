@@ -1450,7 +1450,8 @@ class BBES:
                     elif heur == '4':
                         key_here = child_loglik
                     elif heur == '5':
-                        key_here = abs(child_loglik + self.top_threshold)
+                        key_here = (child_loglik if child_loglik > -self.top_threshold
+                                else 0)
                     elif heur == '6':
                         key_here = -child_loglik
                     else:
@@ -2162,7 +2163,7 @@ if __name__ == "__main__":
         # heuristic number 1-6
         run_experiment(5, p_edge=.5, num_repeats=100, N=10000,
                        without_precomp=1,  use_peek=False,
-                       branching_heuristic=('4'),
+                       branching_heuristic=('5'),
                        verbose=-1, show_progress=(-1 <= 1))
 
     else:
