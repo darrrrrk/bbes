@@ -1439,7 +1439,7 @@ class BBES:
 
                 key = ()
                 for heur in self.branching_heuristic:
-                    if heur == "1": 
+                    if heur == "1":
                         key_here = np.random.rand()
                     elif heur == "2":
                         key_here = (1 if child_loglik > -self.top_threshold
@@ -1447,10 +1447,10 @@ class BBES:
                     elif heur == '3':
                         key_here = min(child_loglik,
                                    -self.top_threshold)
-                    elif heur == '4': 
+                    elif heur == '4':
                         key_here = child_loglik
                     elif heur == '5':
-                        key_here = abs(child_loglik + self.penalty_weight)
+                        key_here = abs(child_loglik + self.top_threshold)
                     elif heur == '6':
                         key_here = -child_loglik
                     else:
@@ -1823,6 +1823,12 @@ class BBES:
                         continue
                     # TODO: implement better branching heuristic for this case
 
+                    if current_state.del_ops_used == len(current_state.available_del_ops):
+                        # this should be redundant for a sufficiently good
+                        # min_param heuristic
+                        current_state.min_params = current_state.max_params
+                        continue
+
                     child_constraint = current_state.available_del_ops[current_state.del_ops_used][1]
 
                     current_state.del_ops_used += 1
@@ -1831,7 +1837,6 @@ class BBES:
                         # this should be redundant for a sufficiently good
                         # min_param heuristic
                         current_state.min_params = current_state.max_params
-                        continue
                     pdag = apply_delete_operator(current_cpdag,
                                                  child_constraint)
                     child_superclass = EquivalenceClass(pdag)
@@ -2152,9 +2157,9 @@ if __name__ == "__main__":
             big = 2# use 5 instead of 6 variables by default
         main(heuristic_i, big)
         '''
-        
-        #run coding task here
-        #heuristic number 1-6
+
+        # run coding task here
+        # heuristic number 1-6
         run_experiment(5, p_edge=.5, num_repeats=100, N=10000,
                        without_precomp=1,  use_peek=False,
                        branching_heuristic=('4'),
