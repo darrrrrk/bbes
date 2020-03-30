@@ -1442,8 +1442,8 @@ class BBES:
                     if heur == "1":
                         key_here = np.random.rand()
                     elif heur == "2":
-                        key_here = (1 if child_loglik > -self.top_threshold
-                                else 0)
+                        key_here = (0 if -child_loglik > self.top_threshold
+                                else 1)
                     elif heur == '3':
                         key_here = min(child_loglik,
                                    -self.top_threshold)
@@ -1460,7 +1460,7 @@ class BBES:
 
                 current_state.available_del_ops.append((key, del_op))
 
-        current_state.available_del_ops.sort() # maxdep heuristic
+        current_state.available_del_ops.sort()
 
         for req_conn in current_state.required_connections:
             current_state.comps.union(req_conn.v, req_conn.w)
@@ -1822,8 +1822,8 @@ class BBES:
                         self.enqueue(current_state)
                         current_state = None
                         continue
-                    # TODO: implement better branching heuristic for this case
 
+                    # TODO: implement better branching heuristic for this case
                     if current_state.del_ops_used == len(current_state.available_del_ops):
                         # this should be redundant for a sufficiently good
                         # min_param heuristic
@@ -1831,13 +1831,8 @@ class BBES:
                         continue
 
                     child_constraint = current_state.available_del_ops[current_state.del_ops_used][1]
-
                     current_state.del_ops_used += 1
 
-                    if current_state.del_ops_used == len(current_state.available_del_ops):
-                        # this should be redundant for a sufficiently good
-                        # min_param heuristic
-                        current_state.min_params = current_state.max_params
                     pdag = apply_delete_operator(current_cpdag,
                                                  child_constraint)
                     child_superclass = EquivalenceClass(pdag)
