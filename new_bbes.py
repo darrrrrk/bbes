@@ -131,161 +131,6 @@ def normalize(mx):
     return mx
 
 
-class GraphAttentionLayer(nn.Module):
-    """
-    Simple GAT layer, similar to https://arxiv.org/abs/1710.10903
-    """
-
-    def __init__(self, in_features, out_features, dropout, alpha, concat=True):
-        super(GraphAttentionLayer, self).__init__()
-        self.dropout = dropout
-        self.in_features = in_features
-        self.out_features = out_features
-        self.alpha = alpha
-        self.concat = concat
-
-        self.W = nn.Parameter(torch.zeros(size=(in_features, out_features)))
-        nn.init.xavier_uniform_(self.W.data, gain=1.414)
-        self.a = nn.Parameter(torch.zeros(size=(2*out_features, 1)))
-        nn.init.xavier_uniform_(self.a.data, gain=1.414)
-
-        self.leakyrelu = nn.LeakyReLU(self.alpha)
-
-    def forward(self, input, adj):
-        h = torch.mm(input, self.W)
-        N = h.size()[0]
-
-        a_input = torch.cat([h.repeat(1, N).view(N * N, -1), h.repeat(N, 1)], dim=1).view(N, -1, 2 * self.out_features)
-        e = self.leakyrelu(torch.matmul(a_input, self.a).squeeze(2))
-
-        zero_vec = -9e15*torch.ones_like(e)
-        attention = torch.where(adj > 0, e, zero_vec)
-        attention = F.softmax(attention, dim=1)
-        attention = F.dropout(attention, self.dropout, training=self.training)
-        h_prime = torch.matmul(attention, h)
-
-        if self.concat:
-            return F.elu(h_prime)
-        else:
-            return h_prime
-
-    def __repr__(self):
-        return self.__class__.__name__ + ' (' + str(self.in_features) + ' -> ' + str(self.out_features) + ')'
-
-
-class GAT(nn.Module):
-    def __init__(self, nfeat, nhid, nclass, dropout, alpha, nheads):
-        """Dense version of GAT."""
-        super(GAT, self).__init__()
-        self.dropout = dropout
-
-        self.attentions = [GraphAttentionLayer(nfeat, nhid, dropout=dropout, alpha=alpha, concat=True) for _ in
-                           range(nheads)]
-        for i, attention in enumerate(self.attentions):
-            self.add_module('attention_{}'.format(i), attention)
-
-        self.out_att = GraphAttentionLayer(nhid * nheads, nclass, dropout=dropout, alpha=alpha, concat=False)
-
-        # self.bn = nn.BatchNorm1d(num_features=256)
-        # self.pool = nn.MaxPool2d(2 , 2)
-
-        self.fc1 = nn.Linear(32 * 21, 128)
-        self.do1 = nn.Dropout(p=0.5)
-        self.fc2 = nn.Linear(128, 64)
-        self.do2 = nn.Dropout(p=0.5)
-        self.fc3 = nn.Linear(64, 11)
-
-    def forward(self, x, adj):
-        x = F.dropout(x, self.dropout, training=self.training)
-        x = torch.cat([att(x, adj) for att in self.attentions], dim=1)
-        x = F.dropout(x, self.dropout, training=self.training)
-        x = F.elu(self.out_att(x, adj))
-
-        # x = self.pool(x.reshape(1, 21, 32))
-
-        x = x.view(-1)
-
-        x = F.relu(self.do1(self.fc1(x)))
-        x = F.relu(self.do2(self.fc2(x)))
-        # x = F.relu(self.do3(self.fc3(x)))
-
-        x = self.fc3(x).reshape(1, -1)
-
-        return x
-
-
-
-class GraphConvolution(nn.Module):
-    """GCN layer"""
-
-    def __init__(self, in_features, out_features, bias=True):
-        super(GraphConvolution, self).__init__()
-        self.in_features = in_features
-        self.out_features = out_features
-        self.weight = nn.Parameter(torch.FloatTensor(in_features, out_features))
-        if bias:
-            self.bias = nn.Parameter(torch.FloatTensor(out_features))
-        else:
-            self.register_parameter('bias', None)
-
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        nn.init.kaiming_uniform_(self.weight)
-        if self.bias is not None:
-            nn.init.zeros_(self.bias)
-
-    def forward(self, input, adj):
-        support = torch.mm(input, self.weight)
-        output = torch.spmm(adj, support)
-        if self.bias is not None:
-            return output + self.bias
-        else:
-            return output
-
-    def extra_repr(self):
-        return 'in_features={}, out_features={}, bias={}'.format(
-            self.in_features, self.out_features, self.bias is not None
-        )
-
-
-class GCN(nn.Module):
-    """a simple two layer GCN"""
-
-    def __init__(self, nfeat, nhid, nclass, dropout):
-        super(GCN, self).__init__()
-        self.gc1 = GraphConvolution(nfeat, nhid)
-        self.gc2 = GraphConvolution(nhid, nclass)
-        # self.gc3 = GraphConvolution(nclass, 128)
-
-        # self.bn = nn.BatchNorm1d(num_features=256)
-
-        self.fc1 = nn.Linear(128, 64)
-        # self.do1 = nn.Dropout(p = 0.3)
-        self.fc2 = nn.Linear(64, 32)
-        # self.do2 = nn.Dropout(p = 0.3)
-        self.fc3 = nn.Linear(32, 11)
-
-        self.fc4 = nn.Linear(11 * 21, 11)
-
-    def forward(self, input, adj):
-        x = F.relu(self.gc1(input, adj))
-        x = F.relu(self.gc2(x, adj))
-        # x = F.relu(self.gc3(x, adj))
-
-        # x = torch.max(x, dim=1)[0].squeeze()
-
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
-
-        x = x.reshape(-1)
-
-        x = self.fc4(x).reshape(1, -1)
-        return x
-
-
-
 def get_encoder_nopre(cpdag):
     d = cpdag.shape[0]
 
@@ -2168,21 +2013,13 @@ class BBES:
 
                 for heur in self.branching_heuristic:
 
+
                     if heur == '1':
 
-                        features =  con_nopre + del_op.get_encoder()
-
-                        bot_frac = gat(torch.from_numpy(normalize(features)).float(), torch.from_numpy(normalize_adj(get_encoder_nopre(current_cpdag))).float())
-                        _, predicted = torch.max(bot_frac.data, 1)
-                        score = self.compute_score(child_loglik, current_state.min_params)
-                        key_here = -(min(score, self.top_threshold) +  2 * self.penalty_weight * predicted/10)
-
-                    elif heur == '2':
-
                         key_here = child_loglik
-                    elif heur =='3':
+                    elif heur =='2':
                         key_here = np.random.rand()
-                    elif heur =='4':
+                    elif heur =='3':
                         features = con_nopre + del_op.get_encoder()
                         bot_frac = model(graphforgat, torch.from_numpy(normalize((features))))
                         #print(get_encoder_nopre(current_cpdag))
@@ -2190,8 +2027,6 @@ class BBES:
                         score = self.compute_score(child_loglik, current_state.min_params)
 
                         key_here = -(min(score, self.top_threshold) +  2 * self.penalty_weight * bot_frac)
-
-
 
                     else:
                         raise ValueError("Unknown branching heuristic")
@@ -2744,7 +2579,7 @@ class BBES:
 def run_experiment(d, p_edge, num_repeats=100, N=10000,
                    without_precomp=1,
                    branching_heuristic=None, use_peek=False,
-                   solver=None, verbose=-1, show_progress=True):  # changed verbose from -1 to 2
+                   solver=None, verbose=-1, show_progress=True, data_use = None, traning_data_generating = None):  # changed verbose from -1 to 2
     global label, traindataset
     if solver is None:
         solver = BBES(d, without_precomp)
@@ -2772,24 +2607,27 @@ def run_experiment(d, p_edge, num_repeats=100, N=10000,
             pi = np.random.permutation(d)
             generating_mB = generating_mB[pi, :][:, pi]
 
-        #bbes original
-        #sampleCov = dag2cov(generating_mB, N)
 
-        #real data test bikedata
-        # df = pd.read_csv('hour.csv')
-        # df_simpl = df[["temp", "atemp", "hum", "windspeed", "casual", "registered"]]
-        # sampleCov = np.cov(df_simpl.values, rowvar=0, ddof=0)
+        if data_use == 1: #bbes original
+            sampleCov = dag2cov(generating_mB, N)
+        elif data_use == 2: #real data test bikedata
 
-        #real data test adultdata
-        data = pd.read_table('adult.data', header=None, sep=',',
-                             names=['age', 'workclass', 'fnlwgt', 'education', 'education_num', 'marital-status',
-                                    'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss',
-                                    'hours-per-week', 'native-country', 'income'])
-        data.to_csv('adult.csv', index=False)
-        df = pd.read_csv('adult.csv')
-        df_simpl = df[["age", "fnlwgt", "education_num", "capital-gain", "capital-loss", "hours-per-week"]]
-        sampleCov = np.cov(df_simpl.values, rowvar=0, ddof=0)
+            df = pd.read_csv('hour.csv')
+            df_simpl = df[["temp", "atemp", "hum", "windspeed", "casual", "registered"]]
+            sampleCov = np.cov(df_simpl.values, rowvar=0, ddof=0)
+        elif data_use == 3:
 
+            #real data test adultdata
+            data = pd.read_table('adult.data', header=None, sep=',',
+                                 names=['age', 'workclass', 'fnlwgt', 'education', 'education_num', 'marital-status',
+                                        'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss',
+                                        'hours-per-week', 'native-country', 'income'])
+            data.to_csv('adult.csv', index=False)
+            df = pd.read_csv('adult.csv')
+            df_simpl = df[["age", "fnlwgt", "education_num", "capital-gain", "capital-loss", "hours-per-week"]]
+            sampleCov = np.cov(df_simpl.values, rowvar=0, ddof=0)
+        else:
+            raise ValueError("invalid data num")
 
         # print("Calling solver.solve()", file=sys.stderr)
         start_time = time.time()
@@ -2830,24 +2668,24 @@ def run_experiment(d, p_edge, num_repeats=100, N=10000,
     print("Total time:", total_time, "sec")
     # loglik_test(solver, d, sampleCov, N)
 
-    '''
-    #prepare training data for gcn
+    if traning_data_generating == 1:
+        #prepare training data for gcn
 
-    label = np.array(label)
- 
-    #label = (label - label.min()) / (label.max() - label.min()) #normalization
-    col_name = []
-    for i in range(int((d+comb(d,2))*(d+comb(d,2))+(d+comb(d,2)) * 57)):
-        col_name.append(i)
-    #col_name.append("label")
-    matrix = np.array(traindataset)
-    print(matrix.shape)
-    data = pd.DataFrame(columns=col_name, data=matrix)
-    data['label'] = label
-    data.to_csv('training_5rep_fraclabel.csv', encoding='utf-8')
+        label = np.array(label)
 
-    print("Training data ready!")
-    '''
+        #label = (label - label.min()) / (label.max() - label.min()) #normalization
+        col_name = []
+        for i in range(int((d+comb(d,2))*(d+comb(d,2))+(d+comb(d,2)) * 57)):
+            col_name.append(i)
+        #col_name.append("label")
+        matrix = np.array(traindataset)
+        print(matrix.shape)
+        data = pd.DataFrame(columns=col_name, data=matrix)
+        data['label'] = label
+        data.to_csv('training_5rep_fraclabel.csv', encoding='utf-8')
+
+        print("Training data ready!")
+
 
 
     return mean, median
@@ -2993,75 +2831,39 @@ def main(heuristic_i, big):
     print("Experiment size:", big)
     evaluate_heuristic(heuristic_i, 0, big)
 
+def GATload(filename):
+
+    checkpoint = torch.load(filename)
+    heads = ([1] * 1) + [1]
+    model = new_GAT(num_layers=1,
+                    in_dim=57,
+                    num_hidden=20,
+                    num_classes=1,
+                    heads=heads,
+                    activation=F.elu,
+                    feat_drop=0.1,
+                    attn_drop=0.3,
+                    negative_slope=0,
+                    residual=False)
+
+    model.double()
+    model.eval()
+    model.load_state_dict(checkpoint['model_state_dict'])
+    return model
+
 
 
 if __name__ == "__main__":
     # generate_delete_operators_TEST()
     # lemma_34_TEST(6)
     # delete_operator_commutativity_TEST(6)
-    if True:
-        '''
-        # Run a set of experiments to get performance statistics.
-        # First command line argument: heuristic number 0-15
-        if len(sys.argv) >= 2:
-            heuristic_i = int(sys.argv[1])
-        else:
-            heuristic_i = 5# heuristic $s$ (maxdep): simple and pretty fast
-        # Second command line argument determines size & number of experiments;
-        # use 2 for PGM
-        if len(sys.argv) >= 3:
-            big = int(sys.argv[2])
-        else:
-            big = 2# use 5 instead of 6 variables by default
-        main(heuristic_i, big)
-        '''
-
-        # run coding task here
-        # heuristic number 1-6
-        '''
-        checkpoint = torch.load('gcn_aug8_catlabel.pt')
-        gcn = GCN(5, 64, 128, 0)
-        gcn.eval()
-        gcn.load_state_dict(checkpoint['model_state_dict'])
-        '''
-
-        '''
-        checkpoint = torch.load('gat_aug21.pt')
-        gat = GAT(5, 64, 32, 0, 0.2, 1)
-        gat.eval()
-        gat.load_state_dict(checkpoint['model_state_dict'])
-        '''
-        checkpoint = torch.load('gat_oct4_test.pt')
-        heads = ([1] * 1) + [1]
-        model = new_GAT(num_layers=1,
-                        in_dim=57,
-                        num_hidden=20,
-                        num_classes=1,
-                        heads=heads,
-                        activation=F.elu,
-                        feat_drop=0.1,
-                        attn_drop=0.3,
-                        negative_slope=0,
-                        residual=False)
-
-        model.double()
-        model.eval()
-        model.load_state_dict(checkpoint['model_state_dict'])
 
 
-        run_experiment(6, p_edge=.5, num_repeats=1, N=10000,
-                       without_precomp=1, use_peek=False,
-                       branching_heuristic=('4'),
-                       verbose=1, show_progress=True)
+    model = GATload('gat_oct4_test.pt')
+
+    run_experiment(6, p_edge=.5, num_repeats=1, N=10000,
+                   without_precomp=1, use_peek=False,
+                   branching_heuristic=('3'),
+                   verbose=0, show_progress=True, data_use=1, traning_data_generating =0)
 
 
-
-    else:
-        # Run a single custom experiment (or multiple repeats of the same one).
-        # without_precomp = 0: precomp; 1: normal; 2: normal with precomp tests
-        without_precomp = 2
-        verbose = 2
-        run_experiment(5, p_edge=.5, num_repeats=1, N=10000,
-                       without_precomp=without_precomp,
-                       branching_heuristic=('maxdep_maxed', 'smallbot', 'smallk'), use_peek=False,
-                       verbose=verbose, show_progress=(verbose <= 1))
