@@ -16,6 +16,15 @@ new_bbes.py
 -----------
 Codes are mostly based on original version of van Ommen's BBES algorithm, except for the part that generates traning data for GAT and applies GAT model to a new branching heuristic. 
 
+#### Generate data for GAT training
+run_experiment(6, p_edge=.5, num_repeats=5, N=10000,
+                   without_precomp=0, use_peek=False,
+                   branching_heuristic=('4'),
+                   verbose=0, show_progress=True, data_use=1, traning_data_generating =1)
+
+                   
+                   
+
 GAT.ipynb
 ---------
 Contains data preprocessing, GAT building and GAT training. 
