@@ -1,6 +1,6 @@
 Overview
 --------
-Here we privode the new version of BBES: (new_bbes.py), with which we can get the traning data for  Graph Attention Network (GAT) model and test the model on both simulated&real_world data. Another file (GAT.ipynb) is the implemention of GAT training. 
+Here we privode the new version of BBES: (new_bbes.py), with which we can get the traning data for  Graph Attention Network (GAT) model and test the new branching heuristic on both simulated&real_world data. Another file (GAT.ipynb) is the implemention of GAT training. 
 
 Dependencies
 ----------
