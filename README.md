@@ -22,7 +22,7 @@ run_experiment(6, p_edge=.5, num_repeats=5, N=10000,
                    branching_heuristic=('4'),
                    verbose=0, show_progress=True, data_use=1, traning_data_generating =1)
 
-#### Testing new branching heuristic on real-world data
+#### Testing new branching heuristic 
 data_use = 1: simulated data; 2: bike data; 3: adult data. When using simulated data, random seed can be set in run_experiment().
 run_experiment(6, p_edge=.5, num_repeats=1, N=10000,
                    without_precomp=1, use_peek=False,
